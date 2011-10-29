@@ -145,8 +145,8 @@ static pthread_t start_server(const char *ciphersuite,
   if (SSL_CTX_use_certificate_chain_file(ctx, certificate) <= 0)
     fail("Unable to use given certificate:\n%s",
 	 ERR_error_string(ERR_get_error(), NULL));
-  if (SSL_CTX_use_RSAPrivateKey_file(ctx, certificate, SSL_FILETYPE_PEM) <= 0)
-    fail("Unable to use given RSA certificate:\n%s",
+  if (SSL_CTX_use_PrivateKey_file(ctx, certificate, SSL_FILETYPE_PEM) <= 0)
+    fail("Unable to use given key file:\n%s",
 	 ERR_error_string(ERR_get_error(), NULL));
 
   /* DH */
@@ -163,6 +163,12 @@ static pthread_t start_server(const char *ciphersuite,
     SSL_CTX_set_tmp_dh(ctx, dh);
     DH_free(dh);
   }
+
+  /* ECDH */
+  EC_KEY *ecdh = NULL;
+  ecdh = EC_KEY_new_by_curve_name(NID_X9_62_prime256v1);
+  SSL_CTX_set_tmp_ecdh(ctx,ecdh);
+  EC_KEY_free(ecdh);
 
   pthread_t threadid;
   if (pthread_create(&threadid, NULL, &server_thread, ctx))
