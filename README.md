@@ -7,3 +7,5 @@ Various tools to assess SSL resistance to DoS
    RSA, DH, DSS, ECDH, ECDSA. If it is not able to do any handshake,
    you need to check if your certificate is compatible with the given
    cipher suite. Check with `openssl s_client` and `openssl s_server`.
+
+ - `iptables.sh` is a set of iptables rule to help avoid SSL DoS.
