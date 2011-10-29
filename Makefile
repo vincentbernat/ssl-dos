@@ -1,11 +1,13 @@
 CFLAGS=-g -Werror -Wall -ansi -std=c99 -D_POSIX_C_SOURCE=199309
 LDFLAGS=
-EXEC=server-vs-client.exe
+EXEC=server-vs-client.exe brute-shake.exe
 
 all: $(EXEC)
 
 server-vs-client.exe: server-vs-client.o common.o
 	$(CC) -o $@ $^ $(LDFLAGS) -lssl -lcrypto -lpthread -lrt
+brute-shake.exe: brute-shake.o common.o
+	$(CC) -o $@ $^ $(LDFLAGS) -lcrypto -lpthread
 
 CERTIFICATES = 768 1024 2048 4096
 certificates: $(patsubst %,%.pem,$(CERTIFICATES))
