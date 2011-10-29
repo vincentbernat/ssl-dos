@@ -29,17 +29,45 @@ $IPTABLES -A LIMIT_SSL \
     --hashlimit-mode srcip --hashlimit-name ssl-conn \
     -j DROP
 
+payload="0 >> 22 & 0x3C @ 12 >> 26 & 0x3C @" # Access to TCP payload (if not fragmented)
+
 # 2. Limit number of renegociation
 #####################################
 $IPTABLES -F LIMIT_RENEGOCIATION 2> /dev/null
 $IPTABLES -X LIMIT_RENEGOCIATION 2> /dev/null
 $IPTABLES -N LIMIT_RENEGOCIATION
-payload="0 >> 22 & 0x3C @ 12 >> 26 & 0x3C @" # Access to TCP payload (if not fragmented)
 $IPTABLES -A LIMIT_RENEGOCIATION \
     -p tcp \
     --tcp-flags SYN,FIN,RST,PSH PSH \
     -m u32 \
     --u32 "$payload 0 >> 8 = 0x160300:0x160303 && $payload 2 & 0xFF = 3:10,17:19,21:255" \
+    -m hashlimit \
+    --hashlimit-above 5/minute --hashlimit-burst 3 \
+    --hashlimit-mode srcip --hashlimit-name ssl-reneg \
+    -j DROP
+
+# 3. Limit number of renegociation (second method)
+#####################################
+$IPTABLES -F LIMIT_RENEGOCIATION2 2> /dev/null
+$IPTABLES -X LIMIT_RENEGOCIATION2 2> /dev/null
+$IPTABLES -N LIMIT_RENEGOCIATION2
+# States:
+#  - 1: Client Hello sent (1)
+#  - 2: Client Key Exchange sent (16)
+$IPTABLES -I LIMIT_RENEGOCIATION2 \
+    -p tcp -m u32 \
+    --u32 "$payload 0 >> 8 = 0x160300:0x160303 && $payload 2 & 0xFF = 1" \
+    -m connmark --mark 0x000/0x300 \
+    -j CONNMARK --set-mark 0x100/0x300
+$IPTABLES -I LIMIT_RENEGOCIATION2 \
+    -p tcp -m u32 \
+    --u32 "$payload 0 >> 8 = 0x160300:0x160303 && $payload 2 & 0xFF = 16" \
+    -m connmark --mark 0x100/0x300 \
+    -j CONNMARK --set-mark 0x200/0x300
+$IPTABLES -I LIMIT_RENEGOCIATION2 \
+    -p tcp -m u32 \
+    --u32 "$payload 0 >> 8 = 0x160300:0x160303" \
+    -m connmark --mark 0x200/0x300 \
     -m hashlimit \
     --hashlimit-above 5/minute --hashlimit-burst 3 \
     --hashlimit-mode srcip --hashlimit-name ssl-reneg \
