@@ -17,7 +17,7 @@ cert_size = $(word 1,$(subst -, ,$@))
 cert_type = $(word 2,$(subst -, ,$@))
 dsa = $(if $(filter dsa,$(cert_type)),--dsa)
 certificates: $(CERTS)
-$(CERTS): %.pem: %-key.pem %-cert.pem %-dh.pem
+%.pem: %-key.pem %-cert.pem %-dh.pem
 	cat $^ > $@
 %-key.pem:
 	certtool --bits $(cert_size) --generate-privkey $(dsa) --outfile $@
