@@ -27,7 +27,7 @@ rcParams['font.sans-serif'] = ["Droid Sans"]
 rcParams['font.size'] = 11
 
 # Create figure
-fig = figure(num=None, figsize=(11.69, 8.27), dpi=100)
+fig = figure(num=None, figsize=(5.51, 7.79), dpi=100)
 ax = fig.add_subplot(111)
 
 # Bar plot
@@ -60,16 +60,16 @@ for rect in client + server:
 for i in range(len(data)):
     width = server[i].get_width()
     if width > 3:
-        xloc = width + 2
+        xloc = width + 4
     else:
-        xloc = width + 3.5
+        xloc = width + 7
     yloc = server[i].get_y() + server[i].get_height()/2.0
     ratio = data[i][2]/data[i][1]
     if ratio <= 2:
         ratio = "%+d %%" % (ratio*100-100)
     else:
         ratio = u"× %.1f" % ratio
-    el = Ellipse((xloc, yloc), 3, 0.57, edgecolor="white",
+    el = Ellipse((xloc, yloc), 6, 0.57, edgecolor="white",
                  facecolor="#8A9B0F", alpha=0.9)
     ax.add_artist(el)
     text(xloc, yloc, ratio,
