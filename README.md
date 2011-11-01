@@ -15,3 +15,6 @@ Various tools to assess SSL resistance to DoS
    of them). Because it could be abused to take down a SSL server, it
    will only uses NULL-MD5 cipher suite. No serious SSL server will
    accept this kind of cipher suite.
+
+You can find more information in this article:
+ http://vincent.bernat.im/en/blog/2011-ssl-dos-mitigation.html
