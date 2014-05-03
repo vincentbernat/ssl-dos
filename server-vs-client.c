@@ -324,8 +324,8 @@ main(int argc, char * const argv[]) {
       "Ratio: %.2f %%\n"
 	    "\n"
 	    "Client handshake bytes received: %d\n"
-	    "Client handshake bytes written: %d\n"	  
-	    "TLS record overhead: %d", 
+	    "Client handshake bytes written: %d\n"      
+	    "TLS record length: %d (data %d, overhead %d)", 
       client_result->handshakes,
       client_result->cpu.tv_sec, client_result->cpu.tv_nsec / 1000000,	  
       server_result->handshakes,
@@ -334,6 +334,8 @@ main(int argc, char * const argv[]) {
       (client_result->cpu.tv_sec * 1000. + client_result->cpu.tv_nsec / 1000000.),
 	    client_result->handshake_read,
 	    client_result->handshake_write,
-	    ((client_result->enc_data_len - client_result->data_len) / client_result->data_writes)
+      DATA_WRITE_LEN + ((client_result->enc_data_len - client_result->data_len) / client_result->data_writes),
+      DATA_WRITE_LEN,
+	    ((client_result->enc_data_len - client_result->data_len) / client_result->data_writes)      
 	  );
 }
