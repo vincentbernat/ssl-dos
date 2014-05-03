@@ -88,7 +88,7 @@ static pthread_t start_client(const char *ciphersuite) {
   SSL_CTX *ctx;
 
   start("Initializing client");
-  if ((ctx = SSL_CTX_new(TLSv1_client_method())) == NULL)
+  if ((ctx = SSL_CTX_new(TLSv1_2_client_method())) == NULL)
     fail("Unable to initialize SSL context:\n%s",
 	 ERR_error_string(ERR_get_error(), NULL));
 
