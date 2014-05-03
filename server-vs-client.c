@@ -39,6 +39,8 @@
 #define DATA_WRITES       1
 #define DATA_WRITE_LEN    1
 
+int handshake_count = 1000;
+
 struct result {
   int handshakes;		/* Number of handshakes done. */
   struct timespec cpu;		/* CPU time */
@@ -105,7 +107,7 @@ static int determine_overhead(SSL *ssl, struct result *result) {
 /* Client part */
 static void* client_thread(void *arg) {
   SSL_CTX       *ctx = arg;
-  int           left = 1000;	/* Number of handshakes left */
+  int           left = handshake_count;	/* Number of handshakes left */
   static struct result result;
   result.handshakes = 0;
   result.handshake_read = 0;
@@ -276,20 +278,27 @@ static pthread_t start_server(const char *ciphersuite,
 
 int
 main(int argc, char * const argv[]) {
-  if (argc != 3) {
+  if ((argc != 3)&&(argc != 4)) {
     fprintf(stderr, "Usage: \n");
-    fprintf(stderr, "  %s ciphersuite certificate\n", argv[0]);
+    fprintf(stderr, "  %s ciphersuite certificate [handshakes]\n", argv[0]);
     fprintf(stderr, "\n");
     fprintf(stderr, " - `ciphersuite` is the name of cipher suite to use. Use\n");
     fprintf(stderr, "   `openssl ciphers` to choose one.\n");
     fprintf(stderr, "\n");
     fprintf(stderr, " - `certificate` is the name of the file containing\n");
     fprintf(stderr, "   the certificate, the key and appropriate additional parameters.\n");
+    fprintf(stderr, "\n");
+    fprintf(stderr, " - `handshakes` is the number of handshakes you wish to\n");
+    fprintf(stderr, "   test. Defaults to 1000.\n");
     return 1;
   }
 
   const char *ciphersuite = argv[1];
   const char *certificate = argv[2];
+  
+  if (argc == 4) {
+    handshake_count = atoi(argv[3]);
+  }
 
   start("Initialize OpenSSL library");
   SSL_load_error_strings();
