@@ -36,9 +36,17 @@
 #include <openssl/bio.h>
 #include <openssl/err.h>
 
+#define DATA_WRITES       1
+#define DATA_WRITE_LEN    1
+
 struct result {
   int handshakes;		/* Number of handshakes done. */
   struct timespec cpu;		/* CPU time */
+  size_t handshake_read;
+  size_t handshake_write;
+  size_t data_writes;
+  size_t data_len;
+  size_t enc_data_len;
 };
 int       clientserver[2];
 
@@ -60,27 +68,85 @@ static unsigned long id_function(void) {
 extern int pthread_getcpuclockid (pthread_t,
                                   clockid_t *);
 
+/* Record handshake bytes read and written, then determine TLS
+ * record overhead by sending a single byte on the connection. */
+static int determine_overhead(SSL *ssl, struct result *result) {
+  char *buf[DATA_WRITE_LEN];
+  int i;
+
+  BIO *bio = SSL_get_rbio(ssl);	
+  result->handshake_read = bio->num_read;
+  result->handshake_write = bio->num_write;	
+					
+  for (i = 0; i < DATA_WRITES; i++) {			
+    size_t bio_write_before = bio->num_write;
+			
+    int r = SSL_write(ssl, buf, DATA_WRITE_LEN);
+    switch(SSL_get_error(ssl, r)) {
+      case SSL_ERROR_NONE :
+        result->data_writes++;
+        result->data_len += DATA_WRITE_LEN;				
+        if (r != DATA_WRITE_LEN) {
+          fprintf(stderr, "Client incomplete write: %d\n", r);
+          return -1;
+        }					
+        break;
+      default:
+        fprintf(stderr, "Client write error: %d\n", r);
+        return -1;				
+    }	
+		
+    result->enc_data_len += bio->num_write - bio_write_before;
+  }
+
+  return 1;
+}
+
 /* Client part */
 static void* client_thread(void *arg) {
   SSL_CTX       *ctx = arg;
   int           left = 1000;	/* Number of handshakes left */
   static struct result result;
   result.handshakes = 0;
+  result.handshake_read = 0;
+  result.handshake_write = 0;
+  result.data_writes = 0;
+  result.data_len = 0;
+  result.enc_data_len = 0;
 
   while (left) {
     SSL *ssl = SSL_new(ctx);
-    SSL_set_fd(ssl, clientserver[0]);
-    if (SSL_connect(ssl) != 1)
-      break;
+    SSL_set_fd(ssl, clientserver[0]);		
+	
+    if (SSL_connect(ssl) != 1) {
+      fprintf(stderr, "Client failed to connect\n");
+      goto client_error;
+    }
+	
     result.handshakes++;
     left--;
-    SSL_set_shutdown(ssl, SSL_SENT_SHUTDOWN);
+	
+    if (result.handshake_read == 0) {
+      if (determine_overhead(ssl, &result) < 0) {
+        goto client_error;
+      }
+    }
+		
+	  SSL_shutdown(ssl);
+	  SSL_shutdown(ssl);	   
     SSL_free(ssl);
+	  continue;
+	
+client_error:
+	  SSL_free(ssl);
+	  break;
   }
+   
   clockid_t cid;
   pthread_getcpuclockid(pthread_self(), &cid);
   clock_gettime(cid, &result.cpu);
   close(clientserver[0]);
+  
   return &result;
 }
 
@@ -91,6 +157,10 @@ static pthread_t start_client(const char *ciphersuite) {
   if ((ctx = SSL_CTX_new(TLSv1_2_client_method())) == NULL)
     fail("Unable to initialize SSL context:\n%s",
 	 ERR_error_string(ERR_get_error(), NULL));
+	
+  #ifdef SSL_OP_NO_COMPRESSION
+  SSL_CTX_set_options(ctx, SSL_OP_NO_COMPRESSION);
+  #endif
 
   if (SSL_CTX_set_cipher_list(ctx, ciphersuite) != 1)
     fail("Unable to set cipher list to %s:\n%s",
@@ -107,6 +177,7 @@ static pthread_t start_client(const char *ciphersuite) {
 /* Server part */
 static void* server_thread(void *arg) {
   SSL_CTX *ctx = arg;
+  char buf[DATA_WRITE_LEN];
   static struct result result;
   result.handshakes = 0;
 
@@ -116,8 +187,30 @@ static void* server_thread(void *arg) {
     if (SSL_accept(ssl) != 1)
       break;
     result.handshakes++;
-    SSL_set_shutdown(ssl, SSL_SENT_SHUTDOWN);
+			
+		int receiving = 1;
+		while(receiving) {			
+			int r = SSL_read(ssl, buf, DATA_WRITE_LEN);	
+			switch(SSL_get_error(ssl, r)) {
+				case SSL_ERROR_NONE:
+					break;
+				case SSL_ERROR_ZERO_RETURN:
+					receiving = 0;
+					break;
+				default:
+          fprintf(stderr, "Server read error: %d\n", r);
+					goto server_error;					
+			}
+		}	
+	
+	  SSL_shutdown(ssl);
+	  SSL_shutdown(ssl);    
     SSL_free(ssl);
+    continue;
+    
+server_error:
+    SSL_free(ssl);
+    break;
   }
   clockid_t cid;
   pthread_getcpuclockid(pthread_self(), &cid);
@@ -134,6 +227,10 @@ static pthread_t start_server(const char *ciphersuite,
   if ((ctx = SSL_CTX_new(SSLv23_server_method())) == NULL)
     fail("Unable to initialize SSL context:\n%s",
 	 ERR_error_string(ERR_get_error(), NULL));
+	 
+  #ifdef SSL_OP_NO_COMPRESSION
+  SSL_CTX_set_options(ctx, SSL_OP_NO_COMPRESSION);
+  #endif
 
   /* Cipher suite */
   if (SSL_CTX_set_cipher_list(ctx, ciphersuite) != 1)
@@ -221,14 +318,22 @@ main(int argc, char * const argv[]) {
 
   end("Got the following results:\n"
       "Handshakes from client: %d\n"
-      "User CPU time in client: %4ld.%03ld\n"
+      "User CPU time in client: %4ld.%03ld\n"	  
       "Handshakes from server: %d\n"
       "User CPU time in server: %4ld.%03ld\n"
-      "Ratio: %.2f %%",
+      "Ratio: %.2f %%\n"
+	    "\n"
+	    "Client handshake bytes received: %d\n"
+	    "Client handshake bytes written: %d\n"	  
+	    "TLS record overhead: %d", 
       client_result->handshakes,
-      client_result->cpu.tv_sec, client_result->cpu.tv_nsec / 1000000,
+      client_result->cpu.tv_sec, client_result->cpu.tv_nsec / 1000000,	  
       server_result->handshakes,
       server_result->cpu.tv_sec, server_result->cpu.tv_nsec / 1000000,
       (server_result->cpu.tv_sec * 1000. + server_result->cpu.tv_nsec / 1000000.) * 100. /
-      (client_result->cpu.tv_sec * 1000. + client_result->cpu.tv_nsec / 1000000.));
+      (client_result->cpu.tv_sec * 1000. + client_result->cpu.tv_nsec / 1000000.),
+	    client_result->handshake_read,
+	    client_result->handshake_write,
+	    ((client_result->enc_data_len - client_result->data_len) / client_result->data_writes)
+	  );
 }
