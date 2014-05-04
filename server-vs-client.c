@@ -265,7 +265,30 @@ static pthread_t start_server(const char *ciphersuite,
 
   /* ECDH */
   EC_KEY *ecdh = NULL;
-  ecdh = EC_KEY_new_by_curve_name(NID_X9_62_prime256v1);
+  EC_GROUP *ecg = NULL;  
+  
+  bio = BIO_new_file(certificate, "r");
+  if (!bio)
+    fail("Unable to read certificate:\n%s",
+	 ERR_error_string(ERR_get_error(), NULL));
+  
+  /* Try to read EC parameters from the certificate file first. */
+  ecg = PEM_read_bio_ECPKParameters(bio, NULL, NULL, NULL);
+  BIO_free(bio);
+  if (ecg) {
+      int nid = EC_GROUP_get_curve_name(ecg);
+      if (!nid) {
+          fail("Unable to find specified named curve");
+      }
+      
+      ecdh = EC_KEY_new_by_curve_name(nid);
+  }
+
+  /* Use prime256v1 by default. */
+  if (ecdh == NULL) {      
+      ecdh = EC_KEY_new_by_curve_name(NID_X9_62_prime256v1);      
+  }
+  
   SSL_CTX_set_tmp_ecdh(ctx,ecdh);
   EC_KEY_free(ecdh);
 
