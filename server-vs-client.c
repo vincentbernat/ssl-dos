@@ -36,13 +36,15 @@
 #include <openssl/bio.h>
 #include <openssl/err.h>
 
-#define DATA_WRITES       1
-#define DATA_WRITE_LEN    1
-
 int handshake_count = 1000;
+
+int data_writes = 0;
+
+int data_write_len = 1;
 
 struct result {
   int handshakes;		/* Number of handshakes done. */
+  struct timespec cpu_handshake;
   struct timespec cpu;		/* CPU time */
   size_t handshake_read;
   size_t handshake_write;
@@ -73,22 +75,22 @@ extern int pthread_getcpuclockid (pthread_t,
 /* Record handshake bytes read and written, then determine TLS
  * record overhead by sending a single byte on the connection. */
 static int determine_overhead(SSL *ssl, struct result *result) {
-  char *buf[DATA_WRITE_LEN];
+  char *buf[data_write_len];
   int i;
 
   BIO *bio = SSL_get_rbio(ssl);	
   result->handshake_read = bio->num_read;
   result->handshake_write = bio->num_write;	
 					
-  for (i = 0; i < DATA_WRITES; i++) {			
+  for (i = 0; i < (data_writes == 0 ? 1 : data_writes); i++) {			
     size_t bio_write_before = bio->num_write;
 			
-    int r = SSL_write(ssl, buf, DATA_WRITE_LEN);
+    int r = SSL_write(ssl, buf, data_write_len);
     switch(SSL_get_error(ssl, r)) {
       case SSL_ERROR_NONE :
         result->data_writes++;
-        result->data_len += DATA_WRITE_LEN;				
-        if (r != DATA_WRITE_LEN) {
+        result->data_len += data_write_len;
+        if (r != data_write_len) {
           fprintf(stderr, "Client incomplete write: %d\n", r);
           return -1;
         }					
@@ -115,6 +117,9 @@ static void* client_thread(void *arg) {
   result.data_writes = 0;
   result.data_len = 0;
   result.enc_data_len = 0;
+  
+  clockid_t cid;
+  pthread_getcpuclockid(pthread_self(), &cid);
 
   while (left) {
     SSL *ssl = SSL_new(ctx);
@@ -127,6 +132,8 @@ static void* client_thread(void *arg) {
 	
     result.handshakes++;
     left--;
+    
+    clock_gettime(cid, &result.cpu_handshake);
 	
     if (result.handshake_read == 0) {
       if (determine_overhead(ssl, &result) < 0) {
@@ -143,9 +150,7 @@ client_error:
 	  SSL_free(ssl);
 	  break;
   }
-   
-  clockid_t cid;
-  pthread_getcpuclockid(pthread_self(), &cid);
+     
   clock_gettime(cid, &result.cpu);
   close(clientserver[0]);
   
@@ -179,9 +184,12 @@ static pthread_t start_client(const char *ciphersuite) {
 /* Server part */
 static void* server_thread(void *arg) {
   SSL_CTX *ctx = arg;
-  char buf[DATA_WRITE_LEN];
+  char buf[data_write_len];
   static struct result result;
   result.handshakes = 0;
+  
+  clockid_t cid;
+  pthread_getcpuclockid(pthread_self(), &cid);
 
   while (1) {
     SSL *ssl = SSL_new(ctx);
@@ -189,10 +197,12 @@ static void* server_thread(void *arg) {
     if (SSL_accept(ssl) != 1)
       break;
     result.handshakes++;
+    
+    clock_gettime(cid, &result.cpu_handshake);
 			
 		int receiving = 1;
 		while(receiving) {			
-			int r = SSL_read(ssl, buf, DATA_WRITE_LEN);	
+			int r = SSL_read(ssl, buf, data_write_len);	
 			switch(SSL_get_error(ssl, r)) {
 				case SSL_ERROR_NONE:
 					break;
@@ -214,8 +224,7 @@ server_error:
     SSL_free(ssl);
     break;
   }
-  clockid_t cid;
-  pthread_getcpuclockid(pthread_self(), &cid);
+  
   clock_gettime(cid, &result.cpu);
   close(clientserver[1]);
   return &result;
@@ -301,9 +310,9 @@ static pthread_t start_server(const char *ciphersuite,
 
 int
 main(int argc, char * const argv[]) {
-  if ((argc != 3)&&(argc != 4)) {
+  if ((argc != 3)&&(argc != 4)&&(argc != 5)) {
     fprintf(stderr, "Usage: \n");
-    fprintf(stderr, "  %s ciphersuite certificate [handshakes]\n", argv[0]);
+    fprintf(stderr, "  %s ciphersuite certificate [[handshakes] [writes]]\n", argv[0]);
     fprintf(stderr, "\n");
     fprintf(stderr, " - `ciphersuite` is the name of cipher suite to use. Use\n");
     fprintf(stderr, "   `openssl ciphers` to choose one.\n");
@@ -313,14 +322,26 @@ main(int argc, char * const argv[]) {
     fprintf(stderr, "\n");
     fprintf(stderr, " - `handshakes` is the number of handshakes you wish to\n");
     fprintf(stderr, "   test. Defaults to 1000.\n");
+    fprintf(stderr, "\n");
+    fprintf(stderr, " - `writes` is the number of 16kb writes to test with\n");
+    fprintf(stderr, "   test. Defaults to 0, which will use a single 1-byte transfer\n");
+    fprintf(stderr, "   to measure record overhead only.\n");
     return 1;
   }
 
   const char *ciphersuite = argv[1];
   const char *certificate = argv[2];
   
-  if (argc == 4) {
+  if (argc > 3) {
     handshake_count = atoi(argv[3]);
+  }
+  
+  if (argc > 4) {
+    data_writes = atoi(argv[4]);
+    if (data_writes > 0) {
+      data_write_len = 16384;
+      handshake_count = 1;
+    }
   }
 
   start("Initialize OpenSSL library");
@@ -350,9 +371,11 @@ main(int argc, char * const argv[]) {
 
   end("Got the following results:\n"
       "Handshakes from client: %d\n"
-      "User CPU time in client: %4ld.%03ld\n"	  
+      "Total User CPU time in client: %4ld.%03ld\n"	  
+      "Transfer User CPU time in client: %4ld.%03ld\n"
       "Handshakes from server: %d\n"
-      "User CPU time in server: %4ld.%03ld\n"
+      "Total User CPU time in server: %4ld.%03ld\n"
+      "Transfer User CPU time in server: %4ld.%03ld\n"
       "Ratio: %.2f %%\n"
 	    "\n"
 	    "Client handshake bytes received: %d\n"
@@ -360,14 +383,16 @@ main(int argc, char * const argv[]) {
 	    "TLS record length: %d (data %d, overhead %d)", 
       client_result->handshakes,
       client_result->cpu.tv_sec, client_result->cpu.tv_nsec / 1000000,	  
+      client_result->cpu.tv_sec - client_result->cpu_handshake.tv_sec, (client_result->cpu.tv_nsec - client_result->cpu_handshake.tv_nsec) / 1000000,	  
       server_result->handshakes,
       server_result->cpu.tv_sec, server_result->cpu.tv_nsec / 1000000,
+      server_result->cpu.tv_sec - server_result->cpu_handshake.tv_sec, (server_result->cpu.tv_nsec - server_result->cpu_handshake.tv_nsec) / 1000000,
       (server_result->cpu.tv_sec * 1000. + server_result->cpu.tv_nsec / 1000000.) * 100. /
       (client_result->cpu.tv_sec * 1000. + client_result->cpu.tv_nsec / 1000000.),
 	    client_result->handshake_read,
 	    client_result->handshake_write,
-      DATA_WRITE_LEN + ((client_result->enc_data_len - client_result->data_len) / client_result->data_writes),
-      DATA_WRITE_LEN,
-	    ((client_result->enc_data_len - client_result->data_len) / client_result->data_writes)      
+      data_write_len + ((client_result->enc_data_len - client_result->data_len) / (client_result->data_writes == 0 ? 1 : client_result->data_writes)),
+      data_write_len,
+	    ((client_result->enc_data_len - client_result->data_len) / (client_result->data_writes == 0 ? 1 : client_result->data_writes))
 	  );
 }
