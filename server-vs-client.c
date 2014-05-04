@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2011 Vincent Bernat <bernat@luffy.cx>
+ * Copyright (c) 2014 Ivan Ristic <ivanr@webkreator.com>
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -231,7 +232,7 @@ server_error:
 }
 
 static pthread_t start_server(const char *ciphersuite,
-			      const char *certificate) {
+			      const char *certificate, const char *params) {
   SSL_CTX *ctx;
 
   start("Initializing server");
@@ -260,7 +261,7 @@ static pthread_t start_server(const char *ciphersuite,
   /* DH */
   DH *dh;
   BIO *bio;
-  bio = BIO_new_file(certificate, "r");
+  bio = BIO_new_file(params, "r");
   if (!bio)
     fail("Unable to read certificate:\n%s",
 	 ERR_error_string(ERR_get_error(), NULL));
@@ -276,7 +277,7 @@ static pthread_t start_server(const char *ciphersuite,
   EC_KEY *ecdh = NULL;
   EC_GROUP *ecg = NULL;  
   
-  bio = BIO_new_file(certificate, "r");
+  bio = BIO_new_file(params, "r");
   if (!bio)
     fail("Unable to read certificate:\n%s",
 	 ERR_error_string(ERR_get_error(), NULL));
@@ -312,13 +313,14 @@ int
 main(int argc, char * const argv[]) {
   if ((argc != 3)&&(argc != 4)&&(argc != 5)) {
     fprintf(stderr, "Usage: \n");
-    fprintf(stderr, "  %s ciphersuite certificate [[handshakes] [writes]]\n", argv[0]);
+    fprintf(stderr, "  %s ciphersuite certificate [params [handshakes [writes]]]\n", argv[0]);
     fprintf(stderr, "\n");
     fprintf(stderr, " - `ciphersuite` is the name of cipher suite to use. Use\n");
     fprintf(stderr, "   `openssl ciphers` to choose one.\n");
     fprintf(stderr, "\n");
-    fprintf(stderr, " - `certificate` is the name of the file containing\n");
-    fprintf(stderr, "   the certificate, the key and appropriate additional parameters.\n");
+    fprintf(stderr, " - `certificate` is the name of the file containing the key and certificate.\n");    
+    fprintf(stderr, "\n");
+    fprintf(stderr, " - `params` is the name of the file containing DH or ECDH params.\n");
     fprintf(stderr, "\n");
     fprintf(stderr, " - `handshakes` is the number of handshakes you wish to\n");
     fprintf(stderr, "   test. Defaults to 1000.\n");
@@ -331,13 +333,18 @@ main(int argc, char * const argv[]) {
 
   const char *ciphersuite = argv[1];
   const char *certificate = argv[2];
+  const char *params = NULL;
   
   if (argc > 3) {
-    handshake_count = atoi(argv[3]);
+    params = argv[3];
   }
   
   if (argc > 4) {
-    data_writes = atoi(argv[4]);
+    handshake_count = atoi(argv[4]);
+  }
+  
+  if (argc > 5) {
+    data_writes = atoi(argv[5]);
     if (data_writes > 0) {
       data_write_len = 16384;
       handshake_count = 1;
@@ -358,7 +365,7 @@ main(int argc, char * const argv[]) {
   start("Prepare client and server");
   if (socketpair(AF_UNIX, SOCK_STREAM, 0, clientserver))
     fail("Unable to get a socket pair for client/server communication:\n%m");
-  server = start_server(ciphersuite, certificate);
+  server = start_server(ciphersuite, certificate, params);
   client = start_client(ciphersuite);
 
   struct result *client_result, *server_result;
