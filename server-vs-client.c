@@ -389,10 +389,10 @@ main(int argc, char * const argv[]) {
       "Total User CPU time in server: %4ld.%03ld\n"
       "Transfer User CPU time in server: %4ld.%03ld\n"
       "Ratio: %.2f %%\n"
-	    "\n"
-	    "Client handshake bytes received: %d\n"
-	    "Client handshake bytes written: %d\n"      
-	    "TLS record length: %d (data %d, overhead %d)", 
+      "\n"
+      "Client handshake bytes received: %d\n"
+      "Client handshake bytes written: %d\n"      
+      "TLS record length: %d (data %d, overhead %d)", 
       client_result->handshakes,
       client_result->cpu.tv_sec, client_result->cpu.tv_nsec / 1000000,	  
       client_result->cpu.tv_sec - client_result->cpu_handshake.tv_sec, (client_result->cpu.tv_nsec - client_result->cpu_handshake.tv_nsec) / 1000000,	  
@@ -401,10 +401,10 @@ main(int argc, char * const argv[]) {
       server_result->cpu.tv_sec - server_result->cpu_handshake.tv_sec, (server_result->cpu.tv_nsec - server_result->cpu_handshake.tv_nsec) / 1000000,
       (server_result->cpu.tv_sec * 1000. + server_result->cpu.tv_nsec / 1000000.) * 100. /
       (client_result->cpu.tv_sec * 1000. + client_result->cpu.tv_nsec / 1000000.),
-	    client_result->handshake_read,
-	    client_result->handshake_write,
+      client_result->handshake_read,
+      client_result->handshake_write,
       data_write_len + ((client_result->enc_data_len - client_result->data_len) / (client_result->data_writes == 0 ? 1 : client_result->data_writes)),
       data_write_len,
-	    ((client_result->enc_data_len - client_result->data_len) / (client_result->data_writes == 0 ? 1 : client_result->data_writes))
-	  );
+      ((client_result->enc_data_len - client_result->data_len) / (client_result->data_writes == 0 ? 1 : client_result->data_writes))
+  );
 }
