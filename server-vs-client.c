@@ -97,11 +97,23 @@ static int determine_overhead(SSL *ssl, struct result *result) {
         }					
         break;
       default:
-        fprintf(stderr, "Client write error: %d\n", r);
+        fprintf(stderr, "Client write error.\n");
         return -1;				
     }	
 		
     result->enc_data_len += bio->num_write - bio_write_before;
+    
+    r = SSL_read(ssl, buf, data_write_len);	
+		switch(SSL_get_error(ssl, r)) {
+      case SSL_ERROR_NONE:
+        break;
+			case SSL_ERROR_ZERO_RETURN:
+				fprintf(stderr, "Server disconnected?\n");
+				break;
+			default:
+        fprintf(stderr, "Server read error.\n");
+				return -1;
+		}
   }
 
   return 1;
@@ -211,9 +223,22 @@ static void* server_thread(void *arg) {
 					receiving = 0;
 					break;
 				default:
-          fprintf(stderr, "Server read error: %d\n", r);
+          fprintf(stderr, "Server read error.");
 					goto server_error;					
 			}
+      
+      r = SSL_write(ssl, buf, data_write_len);
+      switch(SSL_get_error(ssl, r)) {
+        case SSL_ERROR_NONE :          
+          if (r != data_write_len) {
+            fprintf(stderr, "Server incomplete write: %d\n", r);
+            goto server_error;
+          }					
+          break;
+        default:
+          fprintf(stderr, "Server write error.\n");
+          goto server_error;
+      }	
 		}	
 	
 	  SSL_shutdown(ssl);
