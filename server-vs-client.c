@@ -47,11 +47,11 @@ struct result {
   int handshakes;		/* Number of handshakes done. */
   struct timespec cpu_handshake;
   struct timespec cpu;		/* CPU time */
-  size_t handshake_read;
-  size_t handshake_write;
-  size_t data_writes;
-  size_t data_len;
-  size_t enc_data_len;
+  unsigned int handshake_read;
+  unsigned int handshake_write;
+  unsigned int data_writes;
+  unsigned int data_len;
+  unsigned int enc_data_len;
 };
 int       clientserver[2];
 
