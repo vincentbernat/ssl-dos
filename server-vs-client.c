@@ -258,49 +258,54 @@ static pthread_t start_server(const char *ciphersuite,
     fail("Unable to use given key file:\n%s",
 	 ERR_error_string(ERR_get_error(), NULL));
 
-  /* DH */
-  DH *dh;
-  BIO *bio;
-  bio = BIO_new_file(params, "r");
-  if (!bio)
-    fail("Unable to read certificate:\n%s",
-	 ERR_error_string(ERR_get_error(), NULL));
+  if (params) {
+    /* DH */
+    DH *dh;
+    BIO *bio;
+    bio = BIO_new_file(params, "r");
+    if (!bio)
+      fail("Unable to read certificate:\n%s",
+      ERR_error_string(ERR_get_error(), NULL));
 
-  dh = PEM_read_bio_DHparams(bio, NULL, NULL, NULL);
-  BIO_free(bio);
-  if (dh) {
-    SSL_CTX_set_tmp_dh(ctx, dh);
-    DH_free(dh);
+    dh = PEM_read_bio_DHparams(bio, NULL, NULL, NULL);
+    BIO_free(bio);
+    if (dh) {
+      SSL_CTX_set_tmp_dh(ctx, dh);
+      DH_free(dh);
+    }
   }
 
   /* ECDH */
   EC_KEY *ecdh = NULL;
   EC_GROUP *ecg = NULL;  
   
-  bio = BIO_new_file(params, "r");
-  if (!bio)
-    fail("Unable to read certificate:\n%s",
-	 ERR_error_string(ERR_get_error(), NULL));
+  if (params) {
+    BIO *bio;
+    bio = BIO_new_file(params, "r");
+    if (!bio)
+      fail("Unable to read certificate:\n%s",
+      ERR_error_string(ERR_get_error(), NULL));
   
-  /* Try to read EC parameters from the certificate file first. */
-  ecg = PEM_read_bio_ECPKParameters(bio, NULL, NULL, NULL);
-  BIO_free(bio);
-  if (ecg) {
-      int nid = EC_GROUP_get_curve_name(ecg);
-      if (!nid) {
+    /* Try to read EC parameters from the certificate file first. */
+    ecg = PEM_read_bio_ECPKParameters(bio, NULL, NULL, NULL);
+    BIO_free(bio);
+    if (ecg) {
+        int nid = EC_GROUP_get_curve_name(ecg);
+        if (!nid) {
           fail("Unable to find specified named curve");
-      }
+        }
       
-      ecdh = EC_KEY_new_by_curve_name(nid);
+        ecdh = EC_KEY_new_by_curve_name(nid);
+    }
   }
 
   /* Use prime256v1 by default. */
   if (ecdh == NULL) {      
-      ecdh = EC_KEY_new_by_curve_name(NID_X9_62_prime256v1);      
-  }
+    ecdh = EC_KEY_new_by_curve_name(NID_X9_62_prime256v1);      
+  }    
   
   SSL_CTX_set_tmp_ecdh(ctx,ecdh);
-  EC_KEY_free(ecdh);
+  EC_KEY_free(ecdh);  
 
   pthread_t threadid;
   if (pthread_create(&threadid, NULL, &server_thread, ctx))
@@ -311,7 +316,7 @@ static pthread_t start_server(const char *ciphersuite,
 
 int
 main(int argc, char * const argv[]) {
-  if ((argc != 3)&&(argc != 4)&&(argc != 5)) {
+  if ((argc != 3)&&(argc != 4)&&(argc != 5)&&(argc != 6)) {
     fprintf(stderr, "Usage: \n");
     fprintf(stderr, "  %s ciphersuite certificate [params [handshakes [writes]]]\n", argv[0]);
     fprintf(stderr, "\n");
