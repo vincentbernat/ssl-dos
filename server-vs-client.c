@@ -214,31 +214,35 @@ static void* server_thread(void *arg) {
     clock_gettime(cid, &result.cpu_handshake);
 			
 		int receiving = 1;
-		while(receiving) {			
-			int r = SSL_read(ssl, buf, data_write_len);	
-			switch(SSL_get_error(ssl, r)) {
-				case SSL_ERROR_NONE:
-					break;
-				case SSL_ERROR_ZERO_RETURN:
-					receiving = 0;
-					break;
-				default:
-          fprintf(stderr, "Server read error.");
-					goto server_error;					
-			}
-      
-      r = SSL_write(ssl, buf, data_write_len);
+    while(receiving) {
+      int write_back = 0;
+      int r = SSL_read(ssl, buf, data_write_len);	
       switch(SSL_get_error(ssl, r)) {
-        case SSL_ERROR_NONE :          
-          if (r != data_write_len) {
-            fprintf(stderr, "Server incomplete write: %d\n", r);
-            goto server_error;
-          }					
+        case SSL_ERROR_NONE:
+          write_back = 1;
+          break;
+        case SSL_ERROR_ZERO_RETURN:
+          receiving = 0;
           break;
         default:
-          fprintf(stderr, "Server write error.\n");
-          goto server_error;
-      }	
+          fprintf(stderr, "Server read error.");
+          goto server_error;					
+      }
+
+      if (write_back) {
+        r = SSL_write(ssl, buf, data_write_len);
+        switch(SSL_get_error(ssl, r)) {
+          case SSL_ERROR_NONE :          
+            if (r != data_write_len) {
+              fprintf(stderr, "Server incomplete write: %d\n", r);
+              goto server_error;
+            }					
+            break;
+          default:
+            fprintf(stderr, "Server write error.\n");
+            goto server_error;
+        }	
+      }
 		}	
 	
 	  SSL_shutdown(ssl);
