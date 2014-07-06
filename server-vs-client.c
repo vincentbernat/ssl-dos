@@ -154,14 +154,14 @@ static void* client_thread(void *arg) {
       }
     }
 		
-	  SSL_shutdown(ssl);
-	  SSL_shutdown(ssl);	   
+    SSL_shutdown(ssl);
+    SSL_shutdown(ssl);	   
     SSL_free(ssl);
 	  continue;
 	
 client_error:
-	  SSL_free(ssl);
-	  break;
+    SSL_free(ssl);
+    break;
   }
      
   clock_gettime(cid, &result.cpu);
@@ -176,7 +176,7 @@ static pthread_t start_client(const char *ciphersuite) {
   start("Initializing client");
   if ((ctx = SSL_CTX_new(TLSv1_2_client_method())) == NULL)
     fail("Unable to initialize SSL context:\n%s",
-	 ERR_error_string(ERR_get_error(), NULL));
+         ERR_error_string(ERR_get_error(), NULL));
 	 
   SSL_CTX_set_session_cache_mode(ctx, SSL_SESS_CACHE_OFF);
 	
@@ -186,8 +186,8 @@ static pthread_t start_client(const char *ciphersuite) {
 
   if (SSL_CTX_set_cipher_list(ctx, ciphersuite) != 1)
     fail("Unable to set cipher list to %s:\n%s",
-	 ciphersuite,
-	 ERR_error_string(ERR_get_error(), NULL));
+         ciphersuite,
+         ERR_error_string(ERR_get_error(), NULL));
 
   pthread_t threadid;
   if (pthread_create(&threadid, NULL, &client_thread, ctx))
@@ -215,7 +215,7 @@ static void* server_thread(void *arg) {
     
     clock_gettime(cid, &result.cpu_handshake);
 			
-		int receiving = 1;
+    int receiving = 1;
     while(receiving) {
       int write_back = 0;
       int r = SSL_read(ssl, buf, data_write_len);	
@@ -245,10 +245,10 @@ static void* server_thread(void *arg) {
             goto server_error;
         }	
       }
-		}	
+    }	
 	
-	  SSL_shutdown(ssl);
-	  SSL_shutdown(ssl);    
+    SSL_shutdown(ssl);
+    SSL_shutdown(ssl);    
     SSL_free(ssl);
     continue;
     
