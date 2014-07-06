@@ -177,6 +177,8 @@ static pthread_t start_client(const char *ciphersuite) {
   if ((ctx = SSL_CTX_new(TLSv1_2_client_method())) == NULL)
     fail("Unable to initialize SSL context:\n%s",
 	 ERR_error_string(ERR_get_error(), NULL));
+	 
+  SSL_CTX_set_session_cache_mode(ctx, SSL_SESS_CACHE_OFF);
 	
   #ifdef SSL_OP_NO_COMPRESSION
   SSL_CTX_set_options(ctx, SSL_OP_NO_COMPRESSION);
@@ -278,6 +280,9 @@ static pthread_t start_server(const char *ciphersuite,
     fail("Unable to set cipher list to %s:\n%s",
 	 ciphersuite,
 	 ERR_error_string(ERR_get_error(), NULL));
+
+  /* Disable session caching */	 
+  SSL_CTX_set_session_cache_mode(ctx, SSL_SESS_CACHE_OFF);
 
   /* Certificate */
   if (SSL_CTX_use_certificate_chain_file(ctx, certificate) <= 0)
