@@ -3,3 +3,5 @@
 doc/
 *.o
 *.exe
+*.key
+*.crt
