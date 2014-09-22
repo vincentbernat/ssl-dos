@@ -54,17 +54,7 @@ $IPTABLES -N LIMIT_RENEGOCIATION2
 # States:
 #  - 1: Client Hello sent (1)
 #  - 2: Client Key Exchange sent (16)
-$IPTABLES -I LIMIT_RENEGOCIATION2 \
-    -p tcp -m u32 \
-    --u32 "$payload 0 >> 8 = 0x160300:0x160303 && $payload 2 & 0xFF = 1" \
-    -m connmark --mark 0x000/0x300 \
-    -j CONNMARK --set-mark 0x100/0x300
-$IPTABLES -I LIMIT_RENEGOCIATION2 \
-    -p tcp -m u32 \
-    --u32 "$payload 0 >> 8 = 0x160300:0x160303 && $payload 2 & 0xFF = 16" \
-    -m connmark --mark 0x100/0x300 \
-    -j CONNMARK --set-mark 0x200/0x300
-$IPTABLES -I LIMIT_RENEGOCIATION2 \
+$IPTABLES -A LIMIT_RENEGOCIATION2 \
     -p tcp -m u32 \
     --u32 "$payload 0 >> 8 = 0x160300:0x160303" \
     -m connmark --mark 0x200/0x300 \
@@ -72,6 +62,16 @@ $IPTABLES -I LIMIT_RENEGOCIATION2 \
     --hashlimit-above 5/minute --hashlimit-burst 3 \
     --hashlimit-mode srcip --hashlimit-name ssl-reneg \
     -j DROP
+$IPTABLES -A LIMIT_RENEGOCIATION2 \
+    -p tcp -m u32 \
+    --u32 "$payload 0 >> 8 = 0x160300:0x160303 && $payload 2 & 0xFF = 16" \
+    -m connmark --mark 0x100/0x300 \
+    -j CONNMARK --set-mark 0x200/0x300
+$IPTABLES -A LIMIT_RENEGOCIATION2 \
+    -p tcp -m u32 \
+    --u32 "$payload 0 >> 8 = 0x160300:0x160303 && $payload 2 & 0xFF = 1" \
+    -m connmark --mark 0x000/0x300 \
+    -j CONNMARK --set-mark 0x100/0x300
 
 # Example of use:
 # $IPTABLES -A FORWARD -d 192.0.2.15 -p tcp --dport 443 -j LIMIT_SSL
