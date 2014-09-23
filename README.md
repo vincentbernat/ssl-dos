@@ -8,7 +8,9 @@ Various tools to assess SSL resistance to DoS
    you need to check if your certificate is compatible with the given
    cipher suite. Check with `openssl s_client` and `openssl s_server`.
 
- - `iptables.sh` is a set of iptables rule to help avoid SSL DoS.
+ - `iptables.sh` is a set of iptables rule to help avoid SSL DoS. Note
+   that those rules rely heavily on heuristics. It is possible to
+   evade them and they can flag false positives. Be cautious.
 
  - `brute-shake` will do a lot of parallel handshakes against a server
    without doing any crypto operation (while the server will do a lot
